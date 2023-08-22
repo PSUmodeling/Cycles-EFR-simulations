@@ -1,7 +1,21 @@
+VERSION = "1.0.post"
+
 DATABASE_VERSION = 3.2
 LOOKUP_TABLE = lambda lut, crop: f'./data/{crop}_rainfed_{lut.lower()}_lookup_{DATABASE_VERSION}.csv'
 
-RUN_FILE = lambda lut, crop: f'./data/{lut.lower()}_{scenario}_{crop}_runs.csv'
+RUN_FILE = lambda lut, crop: f'./data/{crop}_{lut.lower()}_runs.csv'
+
+SCENARIOS = [
+    'nw_cntrl_03',
+    'nw_targets_01',
+    'nw_targets_02',
+    'nw_targets_03',
+    'nw_targets_04',
+    'nw_targets_05',
+    'nw_ur_150_07',
+]
+
+CONTROL_SCENARIO = 'nw_cntrl_03'
 
 CROPS = {
     'maize': {
@@ -28,6 +42,9 @@ CROPS = {
         'minimum_temperature': '-999',
     }
 }
+
+YEARS = 19
+INJECTION_YEAR = 5
 
 MONTHS = {
     '01': [1, 31],
