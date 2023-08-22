@@ -3,70 +3,12 @@
 import argparse
 import numpy as np
 import pandas as pd
+from setting import LOOKUP_TABLE, CROPS, MONTHS, MOVING_AVERAGE_HALF_WINDOW, SLOPE_WINDOW, DAYS_IN_MONTH, DAYS_IN_WEEK
 
-"""Calculate planting dates
+"""Calculate planting dates and selecting hybrids
 """
-
-LOOKUP = lambda lut, crop: f'./data/{crop}_rainfed_{lut.lower()}_lookup_3.2.csv'
-RUNS = lambda lut, crop: f'./data/{lut.lower()}_{scenario}_{crop}_runs.csv'
-
-TMP_BASE = 6.0
-TMP_REF = 10.0
-
-TMP_MAXS = {
-    'maize': '-999',
-    'springwheat': '-999',
-    'winterwheat': '15.0',
-}
-TMP_MINS = {
-    'maize': '15.0',
-    'springWheat': '5.0',
-    'winterWheat': '-999',
-}
-CROPS = {
-    'maize',
-    'springwheat',
-    'winterwheat',
-}
-HYBRIDS = {
-    'maize': {
-        'CornRM.115': 2425.0,
-        'CornRM.110': 2300.0,
-        'CornRM.105': 2175.0,
-        'CornRM.100': 2050.0,
-        'CornRM.95': 1925.0,
-        'CornRM.90': 1800.0,
-        'CornRM.85': 1675.0,
-        'CornRM.80': 1550.0,
-        'CornRM.75': 1425.0,
-        'CornRM.70': 1300.0,
-    }
-}
-MONTHS = {
-    '01': [1, 31],
-    '02': [32, 59],
-    '03': [60, 90],
-    '04': [91, 120],
-    '05': [121, 151],
-    '06': [152, 181],
-    '07': [182, 212],
-    '08': [213, 243],
-    '09': [244, 273],
-    '10': [274, 304],
-    '11': [305, 334],
-    '12': [335, 365],
-}
-
-TMP_HALF_WINDOW = 45
-TMP_SLOPE_WINDOW = 7
-
-PRCP_LEFT_WINDOW = 60
-PRCP_RIGHT_WINDOW = 30
-PRCP_SLOPE_WINDOW = 7
-
-
 def read_cycles_weather(f):
-    cols = {
+    columns = {
         'YEAR': int,
         'DOY': int,
         'PP': float,
@@ -79,13 +21,13 @@ def read_cycles_weather(f):
     }
     df = pd.read_csv(
         f,
-        names=cols.keys(),
+        names=columns.keys(),
         comment='#',
         sep='\s+',
         na_values=[-999],
     )
     df = df.iloc[4:, :]
-    df = df.astype(cols)
+    df = df.astype(columns)
 
     return df
 
@@ -103,7 +45,7 @@ def find_month(doy):
         if value[0] <= doy <= value[1]: return key
 
 
-def moving_avg(arr, left_window, right_window):
+def moving_average(arr, left_window, right_window):
     avg = []
     length = len(arr)
     for i in range(right_window):
@@ -115,7 +57,7 @@ def moving_avg(arr, left_window, right_window):
     return avg
 
 
-def cal_slope(arr, left_window):
+def calculate_slope(arr, left_window):
     slope = []
     arr = np.array(arr)
     for i in range(len(arr)):
@@ -127,100 +69,101 @@ def cal_slope(arr, left_window):
     return slope
 
 
-def select_cultivar(crop, monthly_df):
-    if any(monthly_df['tmp'] > float(TMP_MINS[crop])):
-        rm, _ = min(HYBRIDS[crop].items(), key=lambda x: abs(monthly_df['thermal_time'].mean() * 365 * 0.85 - x[1]))
+def select_hybrid(crop, monthly_df):
+    if any(monthly_df['temperature'] > float(CROPS[crop]['minimum_temperature'])):
+        hybrid, _ = min(CROPS[crop]['hybrids'].items(), key=lambda x: abs(monthly_df['thermal_time'].mean() * 365 * 0.85 - x[1]))
         if any(monthly_df['PP'] * 30.0 < 100.0):
-            limit = 'tmp' if any(monthly_df['tmp'] < TMP_REF) else 'prcp'
+            limit = 'temperature' if any(monthly_df['temperature'] < CROPS[crop]['reference_temperature']) else 'precipitation'
         else:
-            limit = 'tmp'
+            limit = 'temperature'
     else:
-        rm = ''
+        hybrid = ''
         limit = ''
 
-    return rm, limit
+    return hybrid, limit
 
 
 def find_doy(df, crop, limit):
-    if limit == 'tmp':
+    minimum_temperature = float(CROPS[crop]['minimum_temperature'])
+    if limit == 'temperature':
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop])) &
-                (df['tmp_slope'] > 0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop]) - 3.0) &
-                (df['tmp_slope'] > 0)
+                (df['temperature_moving_average'] >= minimum_temperature - 3.0) &
+                (df['temperature_slope'] > 0)
             ].index[0]
         except:
             return np.nan
     else:
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop])) &
-                (df['tmp_slope'] > 0) &
-                (df['prcp_slope'] > 0) &
-                (df['prcp_ma'] > 100.0 / 31.0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0) &
+                (df['precipitation_slope'] > 0) &
+                (df['precipitation_moving_average'] > 100.0 / 31.0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop])) &
-                (df['tmp_slope'] > 0) &
-                (df['prcp_slope'] > 0) &
-                (df['prcp_ma'] > 80.0 / 31.0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0) &
+                (df['precipitation_slope'] > 0) &
+                (df['precipitation_moving_average'] > 80.0 / 31.0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop] - 3.0)) &
-                (df['tmp_slope'] > 0) &
-                (df['prcp_slope'] > 0) &
-                (df['prcp_ma'] > 100.0 / 31.0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0) &
+                (df['precipitation_slope'] > 0) &
+                (df['precipitation_moving_average'] > 100.0 / 31.0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop] - 3.0)) &
-                (df['tmp_slope'] > 0) &
-                (df['prcp_slope'] > 0) &
-                (df['prcp_ma'] > 80.0 / 31.0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0) &
+                (df['precipitation_slope'] > 0) &
+                (df['precipitation_moving_average'] > 80.0 / 31.0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop])) &
-                (df['tmp_slope'] > 0) &
-                (df['prcp_slope'] > 0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0) &
+                (df['precipitation_slope'] > 0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop] - 3.0)) &
-                (df['tmp_slope'] > 0) &
-                (df['prcp_slope'] > 0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0) &
+                (df['precipitation_slope'] > 0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop])) &
-                (df['tmp_slope'] > 0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['tmp_ma'] >= float(TMP_MINS[crop] - 3.0)) &
-                (df['tmp_slope'] > 0)
+                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_slope'] > 0)
             ].index[0]
         except:
             return np.nan
@@ -228,14 +171,14 @@ def find_doy(df, crop, limit):
 
 def main(params):
     crop = params['crop']
-    lut = params['lut']
-    scenario = 'nw_cntrl_03' if lut == 'EOW' else ''
+    lookup_table = params['lut']
+    scenario = 'nw_cntrl_03' if lookup_table == 'EOW' else ''
     start_year = params['start']
     end_year = params['end']
 
     # Read in look-up table or run table
     lookup_df = pd.read_csv(
-        LOOKUP(lut, crop),
+        LOOKUP_TABLE(lookup_table, crop),
         index_col=0,
     )
 
@@ -248,40 +191,37 @@ def main(params):
         dict[grid] = {}
 
         # Open weather file
-        f = f'./input/weather/{scenario}/{scenario}_{grid}.weather' if lut == 'EOW' else f'input/weather/{grid}'
+        f = f'./input/weather/{scenario}/{scenario}_{grid}.weather' if lookup_table == 'EOW' else f'input/weather/{grid}'
         df = read_cycles_weather(f)
 
         # Calculate daily average temperature and thermal time
-        df['tmp'] = 0.5 * (df['TX'] + df['TN'])  # average temperature
-        df['thermal_time'] = df['tmp'].map(lambda x: 0.0 if x < TMP_BASE else x - TMP_BASE)
+        df['temperature'] = 0.5 * (df['TX'] + df['TN'])     # average temperature
+        df['thermal_time'] = df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])   # thermal time
 
         # Average to DOY
         df = df.groupby('DOY').mean()
         df['month'] = df.index.map(lambda x: find_month(x))
 
-        # Selecte cultivar and determin if area is temperature or precipitation limited
-        rm, limit = select_cultivar(crop, df.groupby('month').mean())
-        if len(rm) == 0: continue
+        # Select hybrid and determine if area is temperature or precipitation limited
+        hybrid, limit = select_hybrid(crop, df.groupby('month').mean())
+        if len(hybrid) == 0: continue
 
-        dict[grid]['Crop'] = rm
+        dict[grid]['Crop'] = hybrid
         dict[grid]['Control'] = limit
 
         # Calculate moving averages of temperature and precipitation, and their slopes
-        df['tmp_smoothed'] = moving_avg(df['tmp'].tolist(), TMP_HALF_WINDOW, TMP_HALF_WINDOW)
-        df['tmp_ma'] = moving_avg(df['tmp'].tolist(), 7, 0)
-        df['tmp_slope'] = cal_slope(df['tmp_smoothed'].tolist(), TMP_SLOPE_WINDOW)
-        df['tmp_slope'] = moving_avg(df['tmp_slope'].tolist(), TMP_HALF_WINDOW, TMP_HALF_WINDOW)
+        df['temperature_smoothed'] = moving_average(df['temperature'].tolist(), MOVING_AVERAGE_HALF_WINDOW, MOVING_AVERAGE_HALF_WINDOW)
+        df['temperature_moving_average'] = moving_average(df['temperature'].tolist(), DAYS_IN_WEEK, 0)
+        df['temperature_slope'] = calculate_slope(df['temperature_smoothed'].tolist(), SLOPE_WINDOW)
+        df['temperature_slope'] = moving_average(df['temperature_slope'].tolist(), MOVING_AVERAGE_HALF_WINDOW, MOVING_AVERAGE_HALF_WINDOW)
 
-        df['prcp_ma'] = moving_avg(df['PP'].tolist(), 0, 30)
-        df['prcp_ma'] = moving_avg(df['prcp_ma'].tolist(), 45, 45)
-        df['prcp_slope'] = cal_slope(df['prcp_ma'].tolist(), PRCP_SLOPE_WINDOW)
-        df['prcp_slope'] = moving_avg(df['prcp_slope'].tolist(), TMP_HALF_WINDOW, TMP_HALF_WINDOW)
-
-        # Find start of rising temperature
-        tmin_doy = df['tmp_smoothed'].idxmin()
+        df['precipitation_moving_average'] = moving_average(df['PP'].tolist(), 0, DAYS_IN_MONTH)
+        df['precipitation_moving_average'] = moving_average(df['precipitation_moving_average'].tolist(), MOVING_AVERAGE_HALF_WINDOW, MOVING_AVERAGE_HALF_WINDOW)
+        df['precipitation_slope'] = calculate_slope(df['precipitation_moving_average'].tolist(), SLOPE_WINDOW)
+        df['precipitation_slope'] = moving_average(df['precipitation_slope'].tolist(), MOVING_AVERAGE_HALF_WINDOW, MOVING_AVERAGE_HALF_WINDOW)
 
         # Adjust DOY to start with lowest temperature
-        df_adjusted = adjust_doy(df, tmin_doy)
+        df_adjusted = adjust_doy(df, df['temperature_smoothed'].idxmin())
 
         # Find doy
         doy = find_doy(df_adjusted, crop, limit)
@@ -305,7 +245,7 @@ def main(params):
         'Lon',
         'CropLat',
         'CropLon',
-    ]).to_csv(f'./data/{crop}_{lut.lower()}_runs.csv')
+    ]).to_csv(f'./data/{crop}_{lookup_table.lower()}_runs.csv')
 
 
 def _main():
