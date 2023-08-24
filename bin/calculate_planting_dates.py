@@ -278,6 +278,8 @@ def main(params):
                     dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
 
     output_df = lookup_df.join(pd.DataFrame(dict).T, on='Weather')
+    output_df = output_df[output_df['Control'].notna()]
+
     output_df.drop(columns=[
         'NAME_0',
         'NAME_1',
