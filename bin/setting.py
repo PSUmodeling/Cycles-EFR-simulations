@@ -4,6 +4,7 @@ DATABASE_VERSION = 3.2
 LOOKUP_TABLE = lambda lut, crop: f'./data/{crop}_rainfed_{lut.lower()}_lookup_{DATABASE_VERSION}.csv'
 
 RUN_FILE = lambda lut, crop: f'./data/{crop}_{lut.lower()}_runs.csv'
+SUMMARY_FILE = lambda lut, scenario, crop: f'summary/{lut.lower()}_{scenario}_{crop}.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
 
 SCENARIOS = [
     'nw_cntrl_03',
@@ -19,7 +20,8 @@ CONTROL_SCENARIO = 'nw_cntrl_03'
 
 CROPS = {
     'maize': {
-        'minimum_temperature': '15.0',
+        'maximum_temperature': '-999',
+        'minimum_temperature': '12.0',
         'base_temperature': 6.0,
         'reference_temperature': 10.0,
         'hybrids': {
@@ -36,9 +38,11 @@ CROPS = {
         },
     },
     'springwheat': {
+        'maximum_temperature': '-999',
         'minimum_temperature': '5.0',
     },
     'winterwheat': {
+        'maximum_temperature': '15.0',
         'minimum_temperature': '-999',
     }
 }
@@ -65,3 +69,7 @@ MOVING_AVERAGE_HALF_WINDOW = 45
 SLOPE_WINDOW = 7
 DAYS_IN_MONTH = 30
 DAYS_IN_WEEK = 7
+
+CYCLES = './bin/Cycles'
+
+RM_CYCLES_IO = 'rm -fr input/*.ctrl input/*.operation input/*.soil output/*'

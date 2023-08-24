@@ -1,46 +1,21 @@
 #!/usr/bin/env python3
 
+"""Run Cycles simulations for different crops under different nuclear war scenarios
+
+Run Cycles simulations
+"""
 import argparse
 import csv
 import os
 import pandas as pd
 import subprocess
 from string import Template
-
-"""Run Cycles simulations for different crops under different nuclear war scenarios
-
-Run Cycles simulations
-"""
-
-CYCLES = './bin/Cycles'
-MAX_TMPS = {
-    'maize': '-999',
-    'springwheat': '-999',
-    'winterwheat': '15.0',
-}
-MIN_TMPS = {
-    'maize': '12.0',
-    'springWheat': '5.0',
-    'winterWheat': '-999',
-}
-CROPS = {
-    'maize',
-    'springwheat',
-    'winterwheat',
-}
-SCENARIOS = [
-    'nw_cntrl_03',
-    'nw_targets_01',
-    'nw_targets_02',
-    'nw_targets_03',
-    'nw_targets_04',
-    'nw_targets_05',
-    'nw_ur_150_07',
-]
-RUNS = lambda lut, crop: f'./data/{crop}_{lut.lower()}_runs.csv'
-SUMMARY = lambda lut, scenario, crop: f'summary/{lut.lower()}_{scenario}_{crop}.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
-
-RM_CYCLES_IO = 'rm -fr input/*.ctrl input/*.operation input/*.soil output/*'
+from setting import RUN_FILE
+from setting import SUMMARY_FILE
+from setting import SCENARIOS
+from setting import CROPS
+from setting import CYCLES
+from setting import RM_CYCLES_IO
 
 
 def generate_cycles_input(gid, crop, soil, weather, start_year, end_year, tmp_max, tmp_min, planting_date):
@@ -97,13 +72,13 @@ def main(params):
 
     os.makedirs('summary', exist_ok=True)
 
-    tmp_max = MAX_TMPS[crop]
-    tmp_min = MIN_TMPS[crop]
+    tmp_max = CROPS[crop]['maximum_temperature']
+    tmp_min = CROPS[crop]['minimum_temperature']
 
-    fn = SUMMARY(lut, scenario, crop)
+    fn = SUMMARY_FILE(lut, scenario, crop)
 
     # Read in look-up table or run table
-    with open(RUNS(lut, crop)) as f:
+    with open(RUN_FILE(lut, crop)) as f:
         reader = csv.reader(f, delimiter=',')
 
         headers = next(reader)
