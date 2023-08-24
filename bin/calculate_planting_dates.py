@@ -130,14 +130,14 @@ def calculate_planting_date(crop, limit, weather_df):
     if limit == 'temperature':
         try:
             return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
                 (df['temperature_slope'] > 0)
             ].index[0]
         except:
             pass
         try:
             return df[
-                (df['temperature_moving_average'] >= minimum_temperature - 3.0) &
+                (df['temperature_moving_average'] >= minimum_temperature) &
                 (df['temperature_slope'] > 0)
             ].index[0]
         except:
@@ -145,7 +145,7 @@ def calculate_planting_date(crop, limit, weather_df):
     else:
         try:
             return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
                 (df['temperature_slope'] > 0) &
                 (df['precipitation_slope'] > 0) &
                 (df['precipitation_moving_average'] > 100.0 / 31.0)
@@ -154,7 +154,7 @@ def calculate_planting_date(crop, limit, weather_df):
             pass
         try:
             return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
                 (df['temperature_slope'] > 0) &
                 (df['precipitation_slope'] > 0) &
                 (df['precipitation_moving_average'] > 80.0 / 31.0)
@@ -181,7 +181,7 @@ def calculate_planting_date(crop, limit, weather_df):
             pass
         try:
             return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
                 (df['temperature_slope'] > 0) &
                 (df['precipitation_slope'] > 0)
             ].index[0]
@@ -197,7 +197,7 @@ def calculate_planting_date(crop, limit, weather_df):
             pass
         try:
             return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
+                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
                 (df['temperature_slope'] > 0)
             ].index[0]
         except:
