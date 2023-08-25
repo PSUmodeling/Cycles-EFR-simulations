@@ -12,48 +12,51 @@ import subprocess
 from string import Template
 from setting import RUN_FILE
 from setting import SUMMARY_FILE
+from setting import YEARS
+from setting import INJECTION_YEAR
 from setting import SCENARIOS
 from setting import CROPS
 from setting import CYCLES
 from setting import RM_CYCLES_IO
 
 
-def generate_cycles_input(gid, crop, soil, weather, start_year, end_year, tmp_max, tmp_min, planting_date):
-    with open(f'data/template.operation') as op_file:
-        op_src = Template(op_file.read())
+def generate_operation_file(gid, hybrids, end_year, max_temperature, min_temperature, planting_date):
+    with open(f'data/template.operation') as f:
+        operation_file_template = Template(f.read())
 
-    with open(f'data/template.ctrl') as ctrl_file:
-        ctrl_src = Template(ctrl_file.read())
+    result = ''
+    for y in range(end_year):
+        operation_data = {
+            'year': y + 1,
+            'doy_start': max(1, int(planting_date) - 7),
+            'doy_end': min(365, int(planting_date) + 90),
+            'max_tmp': max_temperature,
+            'min_tmp': min_temperature,
+            'crop': hybrids[y],
+        }
+        result += operation_file_template.substitute(operation_data) + '\n'
 
-    op_data = {
-        'doy_start': max(1, int(planting_date) - 7),
-        'doy_end': min(365, int(planting_date) + 21),
-        'max_tmp': tmp_max,
-        'min_tmp': tmp_min,
-        'crop': crop,
-    }
-    result = op_src.substitute(op_data)
+    with open(f'./input/{gid}.operation', 'w') as f: f.write(result)
 
-    with open(f'./input/{gid}.operation', 'w') as f: f.write(result + '\n')
 
-    ### Create control file
-    ctrl_data = {
+def generate_control_file(gid, soil, weather, start_year, end_year):
+    with open(f'data/template.ctrl') as f:
+        control_file_template = Template(f.read())
+
+    control_data = {
         'start': f'{start_year:04}',
         'end': f'{end_year:04}',
+        'rotation_size': end_year - start_year + 1,
         'operation': f'{gid}.operation',
-        'soil': f'soil/{soil}',
+        'soil': soil,
         'weather': f'weather/{weather}',
     }
-    result = ctrl_src.substitute(ctrl_data)
+    result = control_file_template.substitute(control_data)
     with open(f'./input/{gid}.ctrl', 'w') as f: f.write(result + '\n')
 
 
-def run_cycles(simulation):
-    cmd = [
-        CYCLES,
-        '-s',
-        simulation,
-    ]
+def run_cycles(simulation, spin_up=False):
+    cmd = [CYCLES, '-s', simulation] if spin_up else [CYCLES, simulation]
     result = subprocess.run(
         cmd,
         stdout=subprocess.DEVNULL,
@@ -64,21 +67,21 @@ def run_cycles(simulation):
 
 
 def main(params):
-    lut = params['lut']
+    lookup_table = params['lut']
     scenario = params['scenario']
     crop = params['crop']
-    start_year = params['start']
-    end_year = params['end']
+    start_year = 1
+    end_year = YEARS
 
     os.makedirs('summary', exist_ok=True)
 
-    tmp_max = CROPS[crop]['maximum_temperature']
-    tmp_min = CROPS[crop]['minimum_temperature']
+    max_temperature = CROPS[crop]['maximum_temperature']
+    min_temperature = CROPS[crop]['minimum_temperature']
 
-    fn = SUMMARY_FILE(lut, scenario, crop)
+    fn = SUMMARY_FILE(lookup_table, scenario, crop)
 
     # Read in look-up table or run table
-    with open(RUN_FILE(lut, crop)) as f:
+    with open(RUN_FILE(lookup_table, crop)) as f:
         reader = csv.reader(f, delimiter=',')
 
         headers = next(reader)
@@ -93,7 +96,7 @@ def main(params):
             if not row: continue    # Skip empty lines
 
             gid = row['GID']
-            weather = f'{scenario}/{scenario}_{row["Weather"]}.weather' if lut == 'EOW' else row['Weather']
+            weather = f'{scenario}/{scenario}_{row["Weather"]}.weather' if lookup_table == 'EOW' else row['Weather']
             soil = row['Soil']
 
             print(
@@ -102,14 +105,17 @@ def main(params):
             )
 
             planting_date = row['pd']
-            crop_rm = row['Crop']
+            hybrids = [row[f'{scenario}_{y:04}'] for y in range(start_year, end_year + 1)]
 
-            # Run Cycles with spin-up
-            generate_cycles_input(gid, crop_rm, soil, weather, start_year, end_year, tmp_max, tmp_min, planting_date)
+            # Run Cycles spin-up
+            generate_operation_file(gid, hybrids, end_year, max_temperature, min_temperature, planting_date)
+            generate_control_file(gid, f'soil/{soil}', weather, start_year, INJECTION_YEAR - 1)
+            run_cycles(gid, spin_up=True)
+
+            generate_control_file(gid, f'{gid}_ss.soil', weather, start_year, end_year)
             run_cycles(gid)
 
             try:
-                # Return season file with best yield
                 df = pd.read_csv(
                     f'output/{gid}/season.txt',
                     sep='\t',
@@ -164,18 +170,6 @@ def _main():
         default='nw_cntrl_03',
         choices=SCENARIOS,
         help='EOW NW scenario',
-    )
-    parser.add_argument(
-        '--start',
-        required=True,
-        type=int,
-        help='Start year of simulation (use 0001 for EOW simulations)',
-    )
-    parser.add_argument(
-        '--end',
-        required=True,
-        type=int,
-        help='End year of simulation (use 0019 for EOW simulations)',
     )
     args = parser.parse_args()
 

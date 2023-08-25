@@ -1,5 +1,5 @@
 TILLAGE
-YEAR                1
+YEAR                $year
 DOY                 $doy_start
 TOOL                Planter_double_disk_opnr
 DEPTH               0.03        # m
@@ -10,7 +10,7 @@ FRAC_THERMAL_TIME   0.0
 KILL_EFFICIENCY     0.0
 
 PLANTING
-YEAR                1
+YEAR                $year
 DOY                 $doy_start
 END_DOY             $doy_end
 MAX_SMC             1.0

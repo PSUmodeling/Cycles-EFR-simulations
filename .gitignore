@@ -161,5 +161,8 @@ cython_debug/
 
 /input/*
 !input/GenericCrops.crop
-data/
+/output/*
+/data/*
+!/data/template.*
+/summary/*
 .DS_Store

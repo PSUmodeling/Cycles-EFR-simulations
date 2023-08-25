@@ -2,7 +2,7 @@
 
 SIMULATION_START_YEAR   $start
 SIMULATION_END_YEAR     $end
-ROTATION_SIZE           1
+ROTATION_SIZE           $rotation_size
 
 ## SIMULATION OPTIONS ##
 
