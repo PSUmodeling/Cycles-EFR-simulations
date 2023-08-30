@@ -14,7 +14,7 @@ YEAR                $year
 DOY                 $doy_start
 END_DOY             $doy_end
 MAX_SMC             1.0
-MIN_SMC             0.5
+MIN_SMC             0.0
 MAX_SOIL_TEMP       $max_tmp    # degree C
 MIN_SOIL_TEMP       $min_tmp    # degree C
 CROP                $crop
