@@ -28,8 +28,8 @@ def generate_operation_file(gid, hybrids, end_year, max_temperature, min_tempera
     for y in range(end_year):
         operation_data = {
             'year': y + 1,
-            'doy_start': max(1, int(planting_date) - 7),
-            'doy_end': min(365, int(planting_date) + 90),
+            'doy_start': int(planting_date) - 7 if int(planting_date) - 7 >= 1 else int(planting_date) - 7 + 365,
+            'doy_end': int(planting_date) + 90 if int(planting_date) + 90 <= 365 else int(planting_date) + 90 - 365,
             'max_tmp': max_temperature,
             'min_tmp': min_temperature,
             'crop': hybrids[y],
