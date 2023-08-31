@@ -3,6 +3,7 @@
 """Calculate planting dates and selecting hybrids
 """
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 from setting import LOOKUP_TABLE
@@ -86,7 +87,7 @@ def select_hybrid(crop, thermal_time):
     return hybrid
 
 
-def calculate_planting_date(crop, limit, weather_df):
+def calculate_planting_date(crop, limit, weather_df, temperature_levels, precipitation_conditions):
     # Calculate moving averages of temperature and precipitation, and their slopes
     df = weather_df.groupby('DOY').mean()
     df['temperature_smoothed'] = moving_average(
@@ -123,92 +124,45 @@ def calculate_planting_date(crop, limit, weather_df):
         MOVING_AVERAGE_HALF_WINDOW, MOVING_AVERAGE_HALF_WINDOW,
     )
 
-    # Adjust DOY to start with lowest temperature
+    # Adjust DOY to start with coldest day
     df = adjust_doy(df, df['temperature_smoothed'].idxmin())
 
-    minimum_temperature = float(CROPS[crop]['minimum_temperature'])
+    # Calculate planting date
+    ## Temperature limited planting date
     if limit == 'temperature':
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
-                (df['temperature_slope'] > 0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
-                (df['temperature_slope'] > 0)
-            ].index[0]
-        except:
+        for temperature in temperature_levels:
+            try:
+                return df[
+                    (df['temperature_moving_average'] >= temperature) &
+                    (df['temperature_slope'] > 0)
+                ].index[0]
+            except:
+                pass
+        else:
             return np.nan
+    ## Precipitation limited planting date
     else:
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
-                (df['temperature_slope'] > 0) &
-                (df['precipitation_slope'] > 0) &
-                (df['precipitation_moving_average'] > 100.0 / 31.0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
-                (df['temperature_slope'] > 0) &
-                (df['precipitation_slope'] > 0) &
-                (df['precipitation_moving_average'] > 80.0 / 31.0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
-                (df['temperature_slope'] > 0) &
-                (df['precipitation_slope'] > 0) &
-                (df['precipitation_moving_average'] > 100.0 / 31.0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
-                (df['temperature_slope'] > 0) &
-                (df['precipitation_slope'] > 0) &
-                (df['precipitation_moving_average'] > 80.0 / 31.0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
-                (df['temperature_slope'] > 0) &
-                (df['precipitation_slope'] > 0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
-                (df['temperature_slope'] > 0) &
-                (df['precipitation_slope'] > 0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature + 3.0) &
-                (df['temperature_slope'] > 0)
-            ].index[0]
-        except:
-            pass
-        try:
-            return df[
-                (df['temperature_moving_average'] >= minimum_temperature) &
-                (df['temperature_slope'] > 0)
-            ].index[0]
-        except:
-            return np.nan
+        for temperature, precipitation in precipitation_conditions:
+            try:
+                return df[
+                    (df['temperature_moving_average'] >= temperature) &
+                    (df['temperature_slope'] > 0) &
+                    (df['precipitation_slope'] > 0) &
+                    (df['precipitation_moving_average'] > precipitation)
+                ].index[0]
+            except:
+                pass
+        else:
+            for temperature in temperature_levels:
+                try:
+                    return df[
+                        (df['temperature_moving_average'] >= temperature) &
+                        (df['temperature_slope'] > 0)
+                    ].index[0]
+                except:
+                    pass
+            else:
+                return np.nan
 
 
 def main(params):
@@ -223,6 +177,19 @@ def main(params):
     )
 
     weathers = lookup_df['Weather'].unique()
+
+    # Create a list of temperature and precipitation conditions for planting date calculation
+    minimum_temperature = float(CROPS[crop]['minimum_temperature'])
+    temperature_levels = [
+        minimum_temperature + 3.0,
+        minimum_temperature + 2.0,
+        minimum_temperature + 1.0,
+        minimum_temperature,
+    ]
+
+    precipitation_conditions = list(itertools.product(temperature_levels, [100 / 30.0, 80 / 30.0]))
+    precipitation_conditions += list(itertools.product(temperature_levels, [60 / 30.0, 40 / 30.0]))
+    precipitation_conditions += list(itertools.product(temperature_levels, [0]))
 
     dict = {}
     counter = 0
@@ -247,7 +214,7 @@ def main(params):
         else:
             limit = 'temperature'
 
-        doy = calculate_planting_date(crop, limit, weather_df)
+        doy = calculate_planting_date(crop, limit, weather_df, temperature_levels, precipitation_conditions)
         if np.isnan(doy):
             continue
 
@@ -260,9 +227,6 @@ def main(params):
 
         # Select hybrid
         hybrid = select_hybrid(crop, monthly_df['thermal_time'].mean() * 365)
-        if lookup_table != 'EOW':
-            dict[grid]['Crop'] = hybrid
-            continue
 
         for s in SCENARIOS:
             if s == CONTROL_SCENARIO:
@@ -303,18 +267,6 @@ def _main():
         default='global',
         choices=['global', 'CONUS', 'EOW', 'test'],
         help='Look-up table to be used',
-    )
-    parser.add_argument(
-        '--start',
-        required=True,
-        type=int,
-        help='Start year of simulation (use 0001 for EOW simulations)',
-    )
-    parser.add_argument(
-        '--end',
-        required=True,
-        type=int,
-        help='End year of simulation (use 0019 for EOW simulations)',
     )
     args = parser.parse_args()
 
