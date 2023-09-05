@@ -11,7 +11,7 @@ import pandas as pd
 import subprocess
 from string import Template
 from setting import RUN_FILE
-from setting import SUMMARY_FILE
+from setting import SUMMARY_FILE, WATER_SUMMARY_FILE
 from setting import YEARS
 from setting import INJECTION_YEAR
 from setting import SCENARIOS
@@ -66,6 +66,56 @@ def run_cycles(simulation, spin_up=False):
     return result.returncode
 
 
+def write_summary(gid, row, header, summary_fp):
+    df = pd.read_csv(
+        f'output/{gid}/season.txt',
+        sep='\t',
+        header=0,
+        skiprows=[1],
+        skipinitialspace=True,
+    )
+    df = df.rename(columns=lambda x: x.strip().lower().replace(' ', '_'))
+    df['crop'] = df['crop'].str.strip()
+    df.insert(0, 'gid', gid)
+    df.insert(1, 'area_km2', row['AreaKm2'])
+    df.insert(2, 'area_fraction', row['AreaFraction'])
+
+    strs = df.to_csv(header=header, index=False)
+
+    summary_fp.write(''.join(strs))
+
+
+def write_water_summary(gid, header, water_summary_fp):
+    df1 = pd.read_csv(
+        f'output/{gid}/environ.txt',
+        sep='\t',
+        header=0,
+        skiprows=[1, 2],
+        skipinitialspace=True,
+        index_col=0,
+    )
+
+    df2 = pd.read_csv(
+        f'output/{gid}/water.txt',
+        sep='\t',
+        header=0,
+        skiprows=[1, 2],
+        skipinitialspace=True,
+        index_col=0,
+    )
+
+    df = df2.join(df1, how='inner')
+    df = df.rename(columns=lambda x: x.strip().lower().replace(' ', '_'))
+    df['year'] = df.index.str[:4]
+    df = df[['soil_evap', 'res_evap', 'snow_sub', 'transpiration', 'precipitation']].groupby(df['year']).sum()
+    df.insert(0, 'gid', gid)
+    df.insert(1, 'year', df.index)
+
+    strs = df.to_csv(header=header, index=False)
+
+    water_summary_fp.write(''.join(strs))
+
+
 def main(params):
     lookup_table = params['lut']
     scenario = params['scenario']
@@ -78,8 +128,6 @@ def main(params):
     max_temperature = CROPS[crop]['maximum_temperature']
     min_temperature = CROPS[crop]['minimum_temperature']
 
-    fn = SUMMARY_FILE(lookup_table, scenario, crop)
-
     # Read in look-up table or run table
     with open(RUN_FILE(lookup_table, crop)) as f:
         reader = csv.reader(f, delimiter=',')
@@ -90,7 +138,7 @@ def main(params):
     first = True
 
     counter = 0
-    with open(fn, 'w') as output_fp:
+    with open(SUMMARY_FILE(lookup_table, scenario, crop), 'w') as summary_fp, open(WATER_SUMMARY_FILE(lookup_table, scenario, crop), 'w') as water_summary_fp:
         # Run each region
         for row in data:
             if not row: continue    # Skip empty lines
@@ -116,28 +164,10 @@ def main(params):
             run_cycles(gid)
 
             try:
-                df = pd.read_csv(
-                    f'output/{gid}/season.txt',
-                    sep='\t',
-                    header=0,
-                    skiprows=[1],
-                    skipinitialspace=True,
-                )
-                df = df.rename(columns=lambda x: x.strip().lower().replace(' ', '_'))
-                df['crop'] = df['crop'].str.strip()
-                df.insert(0, 'gid', gid)
-                df.insert(1, 'area_km2', row['AreaKm2'])
-                df.insert(2, 'area_fraction', row['AreaFraction'])
-
+                write_water_summary(gid, first, water_summary_fp)
+                write_summary(gid, row, first, summary_fp)
+                if first: first = False
                 print('Success')
-
-                if first:
-                    strs = df.to_csv(index=False)
-                    first = False
-                else:
-                    strs = df.to_csv(header=False, index=False)
-
-                output_fp.write(''.join(strs))
             except:
                 print('Cycles errors')
 
