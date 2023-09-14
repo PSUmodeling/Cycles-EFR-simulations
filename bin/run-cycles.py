@@ -12,7 +12,6 @@ import subprocess
 from string import Template
 from setting import RUN_FILE
 from setting import SUMMARY_FILE, WATER_SUMMARY_FILE
-from setting import YEARS
 from setting import INJECTION_YEAR
 from setting import SCENARIOS
 from setting import CROPS
@@ -20,12 +19,12 @@ from setting import CYCLES
 from setting import RM_CYCLES_IO
 
 
-def generate_operation_file(gid, hybrids, end_year, max_temperature, min_temperature, planting_date):
+def generate_operation_file(gid, hybrids, rotation_size, max_temperature, min_temperature, planting_date):
     with open(f'data/template.operation') as f:
         operation_file_template = Template(f.read())
 
     result = ''
-    for y in range(end_year):
+    for y in range(rotation_size):
         operation_data = {
             'year': y + 1,
             'doy_start': int(planting_date) - 7 if int(planting_date) - 7 >= 1 else int(planting_date) - 7 + 365,
@@ -39,14 +38,14 @@ def generate_operation_file(gid, hybrids, end_year, max_temperature, min_tempera
     with open(f'./input/{gid}.operation', 'w') as f: f.write(result)
 
 
-def generate_control_file(gid, soil, weather, start_year, end_year):
+def generate_control_file(gid, soil, weather, start_year, end_year, rotation_size):
     with open(f'data/template.ctrl') as f:
         control_file_template = Template(f.read())
 
     control_data = {
         'start': f'{start_year:04}',
         'end': f'{end_year:04}',
-        'rotation_size': end_year - start_year + 1,
+        'rotation_size': rotation_size,
         'operation': f'{gid}.operation',
         'soil': soil,
         'weather': f'weather/{weather}',
@@ -120,8 +119,8 @@ def main(params):
     lookup_table = params['lut']
     scenario = params['scenario']
     crop = params['crop']
-    start_year = 1
-    end_year = YEARS
+    start_year = params['start']
+    end_year = params['end']
 
     os.makedirs('summary', exist_ok=True)
 
@@ -153,15 +152,18 @@ def main(params):
             )
 
             planting_date = row['pd']
-            hybrids = [row[f'{scenario}_{y:04}'] for y in range(start_year, end_year + 1)]
+            hybrids = [row[f'{scenario}_{y:04}'] for y in range(start_year, end_year + 1)] if lookup_table == 'EOW' else [row['crop']]
+            rotation_size = end_year - start_year + 1 if lookup_table == 'EOW' else 1
 
             # Run Cycles spin-up
-            generate_operation_file(gid, hybrids, end_year, max_temperature, min_temperature, planting_date)
-            generate_control_file(gid, f'soil/{soil}', weather, start_year, INJECTION_YEAR - 1)
+            generate_operation_file(gid, hybrids, rotation_size, max_temperature, min_temperature, planting_date)
+            generate_control_file(gid, f'soil/{soil}', weather, start_year, INJECTION_YEAR - 1 if lookup_table == 'EOW' else end_year, rotation_size)
             run_cycles(gid, spin_up=True)
 
-            generate_control_file(gid, f'{gid}_ss.soil', weather, start_year, end_year)
-            run_cycles(gid)
+            # If running EOW, run Cycles again using steady state soil
+            if lookup_table == 'EOW':
+                generate_control_file(gid, f'{gid}_ss.soil', weather, start_year, end_year, rotation_size)
+                run_cycles(gid)
 
             try:
                 write_water_summary(gid, first, water_summary_fp)
@@ -200,6 +202,18 @@ def _main():
         default='nw_cntrl_03',
         choices=SCENARIOS,
         help='EOW NW scenario',
+    )
+    parser.add_argument(
+        '--start',
+        required=True,
+        type=int,
+        help='Start year of simulation (use 0001 for EOW simulations)',
+    )
+    parser.add_argument(
+        '--end',
+        required=True,
+        type=int,
+        help='End year of simulation (use 0019 for EOW simulations)',
     )
     args = parser.parse_args()
 

@@ -48,7 +48,6 @@ CROPS = {
     }
 }
 
-YEARS = 19
 INJECTION_YEAR = 5
 
 MONTHS = {
@@ -63,7 +62,7 @@ MONTHS = {
     '09': [244, 273],
     '10': [274, 304],
     '11': [305, 334],
-    '12': [335, 365],
+    '12': [335, 366],
 }
 
 MOVING_AVERAGE_HALF_WINDOW = 45

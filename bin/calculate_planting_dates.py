@@ -10,7 +10,6 @@ from setting import LOOKUP_TABLE
 from setting import RUN_FILE
 from setting import SCENARIOS
 from setting import CONTROL_SCENARIO
-from setting import YEARS
 from setting import INJECTION_YEAR
 from setting import CROPS
 from setting import MONTHS
@@ -19,7 +18,8 @@ from setting import SLOPE_WINDOW
 from setting import DAYS_IN_MONTH
 from setting import DAYS_IN_WEEK
 
-def read_cycles_weather(f):
+def read_cycles_weather(f, start_year=0, end_year=9999):
+    NUM_HEADER_LINES = 4
     columns = {
         'YEAR': int,
         'DOY': int,
@@ -38,8 +38,9 @@ def read_cycles_weather(f):
         sep='\s+',
         na_values=[-999],
     )
-    df = df.iloc[4:, :]
+    df = df.iloc[NUM_HEADER_LINES:, :]
     df = df.astype(columns)
+    df = df[(df['YEAR'] <= end_year) & (df['YEAR'] >= start_year)]
 
     return df
 
@@ -64,7 +65,7 @@ def moving_average(array, left_window, right_window):
         array.append(array[i])
     array = np.array(array)
     for i in range(length):
-        avg_array.append(sum(array[np.r_[i-left_window:i+right_window+1]]) / float(left_window + right_window + 1))
+        avg_array.append(sum(array[np.r_[i-left_window : i+right_window+1]]) / float(left_window + right_window + 1))
 
     return avg_array
 
@@ -169,6 +170,8 @@ def main(params):
     crop = params['crop']
     lookup_table = params['lut']
     scenario = CONTROL_SCENARIO if lookup_table == 'EOW' else ''
+    start_year = params['start']
+    end_year = params['end']
 
     # Read in look-up table or run table
     lookup_df = pd.read_csv(
@@ -198,11 +201,11 @@ def main(params):
 
         # Open weather file
         f = f'./input/weather/{scenario}/{scenario}_{grid}.weather' if lookup_table == 'EOW' else f'input/weather/{grid}'
-        weather_df = read_cycles_weather(f)
+        weather_df = read_cycles_weather(f, start_year, end_year)
 
         # Calculate daily average temperature and thermal time
-        weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])     # average temperature
-        weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])   # thermal time
+        weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
+        weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
         weather_df['month'] = weather_df['DOY'].map(lambda x: find_month(x))
 
         monthly_df = weather_df.groupby('month').mean()
@@ -228,18 +231,21 @@ def main(params):
         # Select hybrid
         hybrid = select_hybrid(crop, monthly_df['thermal_time'].mean() * 365)
 
-        for s in SCENARIOS:
-            if s == CONTROL_SCENARIO:
-                for y in range(1, YEARS + 1):
-                    dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid
-            else:
-                f = f'./input/weather/{s}/{s}_{grid}.weather'
-                weather_df = read_cycles_weather(f)
-                weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])     # average temperature
-                weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])   # thermal time
+        if lookup_table == 'EOW':
+            for s in SCENARIOS:
+                if s == CONTROL_SCENARIO:
+                    for y in range(start_year, end_year + 1):
+                        dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid
+                else:
+                    f = f'./input/weather/{s}/{s}_{grid}.weather'
+                    weather_df = read_cycles_weather(f, start_year, end_year)
+                    weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
+                    weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
 
-                for y in range(1, YEARS + 1):
-                    dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
+                    for y in range(start_year, end_year + 1):
+                        dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
+        else:
+            dict[grid]['crop'] = hybrid
 
     output_df = lookup_df.join(pd.DataFrame(dict).T, on='Weather')
     output_df = output_df[output_df['Control'].notna()]
@@ -264,9 +270,21 @@ def _main():
     )
     parser.add_argument(
         '--lut',
-        default='global',
+        default='EOW',
         choices=['global', 'CONUS', 'EOW', 'test'],
         help='Look-up table to be used',
+    )
+    parser.add_argument(
+        '--start',
+        required=True,
+        type=int,
+        help='Start year of simulation (use 0001 for EOW simulations)',
+    )
+    parser.add_argument(
+        '--end',
+        required=True,
+        type=int,
+        help='End year of simulation (use 0019 for EOW simulations)',
     )
     args = parser.parse_args()
 
