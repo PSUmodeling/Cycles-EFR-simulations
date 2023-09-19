@@ -121,6 +121,8 @@ def main(params):
     crop = params['crop']
     start_year = params['start']
     end_year = params['end']
+    adaption = params['adaption']
+    print(adaption)
 
     os.makedirs('summary', exist_ok=True)
 
@@ -137,7 +139,7 @@ def main(params):
     first = True
 
     counter = 0
-    with open(SUMMARY_FILE(lookup_table, scenario, crop), 'w') as summary_fp, open(WATER_SUMMARY_FILE(lookup_table, scenario, crop), 'w') as water_summary_fp:
+    with open(SUMMARY_FILE(lookup_table, scenario, crop, adaption), 'w') as summary_fp, open(WATER_SUMMARY_FILE(lookup_table, scenario, crop, adaption), 'w') as water_summary_fp:
         # Run each region
         for row in data:
             if not row: continue    # Skip empty lines
@@ -152,8 +154,12 @@ def main(params):
             )
 
             planting_date = row['pd']
-            hybrids = [row[f'{scenario}_{y:04}'] for y in range(start_year, end_year + 1)] if lookup_table == 'EOW' else [row['crop']]
-            rotation_size = end_year - start_year + 1 if lookup_table == 'EOW' else 1
+            if lookup_table == 'EOW':
+                hybrids = [row[f'{scenario}_{y:04}'] for y in range(start_year, end_year + 1)] if adaption else [row[f'{scenario}_0001']]
+                rotation_size = end_year - start_year + 1 if adaption else 1
+            else:
+                hybrids = [row['crop']]
+                rotation_size = 1
 
             # Run Cycles spin-up
             generate_operation_file(gid, hybrids, rotation_size, max_temperature, min_temperature, planting_date)
@@ -215,6 +221,17 @@ def _main():
         type=int,
         help='End year of simulation (use 0019 for EOW simulations)',
     )
+    parser.add_argument(
+        '--adaption',
+        action='store_true',
+        help='Flag for adaption strategy',
+    )
+    parser.add_argument(
+        '--no-adaption',
+        dest='adaption',
+        action='store_false',
+    )
+    parser.set_defaults(adaption=True)
     args = parser.parse_args()
 
     main(vars(args))

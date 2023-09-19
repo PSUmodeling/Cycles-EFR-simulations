@@ -4,8 +4,8 @@ DATABASE_VERSION = 3.2
 LOOKUP_TABLE = lambda lut, crop: f'./data/{crop}_rainfed_{lut.lower()}_lookup_{DATABASE_VERSION}.csv'
 
 RUN_FILE = lambda lut, crop: f'./data/{crop}_{lut.lower()}_runs.csv'
-SUMMARY_FILE = lambda lut, scenario, crop: f'summary/{lut.lower()}_{scenario}_{crop}.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
-WATER_SUMMARY_FILE = lambda lut, scenario, crop: f'summary/{lut.lower()}_{scenario}_{crop}_water.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
+SUMMARY_FILE = lambda lut, scenario, crop, adaption: f'summary/{lut.lower()}_{scenario}_{crop}{"_adation" if adaption else ""}.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
+WATER_SUMMARY_FILE = lambda lut, scenario, crop, adaption: f'summary/{lut.lower()}_{scenario}_{crop}_water{"_adation" if adaption else ""}.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
 
 SCENARIOS = [
     'nw_cntrl_03',
