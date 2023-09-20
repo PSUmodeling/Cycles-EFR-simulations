@@ -1,11 +1,20 @@
 ## SIMULATION YEARS ##
 
-SIMULATION_START_YEAR   $start
-SIMULATION_END_YEAR     $end
+SIMULATION_START_DATE   $start
+SIMULATION_END_DATE     $end
 ROTATION_SIZE           $rotation_size
+
+## OTHER INPUT FILES ##
+
+CROP_FILE               GenericCrops.crop
+OPERATION_FILE          $operation
+SOIL_FILE               $soil
+WEATHER_FILE            $weather
+REINIT_FILE             N/A
 
 ## SIMULATION OPTIONS ##
 
+CO2_LEVEL               400
 USE_REINITIALIZATION    0
 ADJUSTED_YIELDS         0
 HOURLY_INFILTRATION     1
@@ -22,11 +31,3 @@ DAILY_SOIL_LYR_CN_OUT   0
 ANNUAL_SOIL_OUT         0
 ANNUAL_PROFILE_OUT      0
 ANNUAL_NFLUX_OUT        0
-
-## OTHER INPUT FILES ##
-
-CROP_FILE               GenericCrops.crop
-OPERATION_FILE          $operation
-SOIL_FILE               $soil
-WEATHER_FILE            $weather
-REINIT_FILE             N/A

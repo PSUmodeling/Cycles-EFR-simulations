@@ -122,7 +122,6 @@ def main(params):
     start_year = params['start']
     end_year = params['end']
     adaption = params['adaption']
-    print(adaption)
 
     os.makedirs('summary', exist_ok=True)
 
