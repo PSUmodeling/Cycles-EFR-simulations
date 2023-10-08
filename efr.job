@@ -11,6 +11,27 @@ jobstart=`date +%s`
 
 python3 ./bin/calculate_planting_dates.py --crop maize --lut EOW --start 0001 --end 0019
 
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_cntrl_03 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_cntrl_03 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_02 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_02 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_03 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_03 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_04 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_04 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_05 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_05 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_ur_150_07 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_ur_150_07 --adaption
+
 jobend=`date +%s`
 echo -e "\nJob ended at `date`"
 dt=$((jobend - jobstart))
