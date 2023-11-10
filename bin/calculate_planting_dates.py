@@ -4,6 +4,7 @@
 """
 import argparse
 import itertools
+import math
 import numpy as np
 import pandas as pd
 from setting import LOOKUP_TABLE
@@ -17,6 +18,110 @@ from setting import MOVING_AVERAGE_HALF_WINDOW
 from setting import SLOPE_WINDOW
 from setting import DAYS_IN_MONTH
 from setting import DAYS_IN_WEEK
+
+def pet(doy, lat, pres, screen_height, t_max, t_min, sol_rad, rh_max, rh_min, wind):
+    """Calculates potential ET using Penman Monteith
+    """
+    RC = 0.0        # surface resistance to vapor flow (day/m) (0.0081 for 350-400 ppm)
+    SCP = 0.001013  # specific heat of dry air (J/kg/C)
+    RGAS = 0.28704  # kg/degree C) (note that pres is in kPa)
+
+    t_avg = (t_max + t_min) / 2.0
+    es_tavg = saturation_vapor_pressure(t_avg)
+    es_tmax = saturation_vapor_pressure(t_max)
+    es_tmin = saturation_vapor_pressure(t_min)
+    ea = 0.5 * (es_tmin * rh_max + es_tmax * rh_min) / 100.0
+    vpd = (es_tmax + es_tmin) / 2.0 - ea
+    pot_rad = potential_radiation(doy, lat)
+    net_rad = net_radiation(pot_rad, sol_rad, ea, t_max, t_min)
+
+    # Aerodynamic resistance to vapor flow (day/m)
+    ra = aerodynamic_resistance(wind, screen_height)
+
+    # Slope of saturated vapor pressure vs temperature function (kPa/C)
+    delta = 4098.0 * es_tavg / ((t_avg + 237.3) * (t_avg + 237.3))
+
+    # Latent heat of vaporization (MJ/kg)
+    l = 2.501 - 0.002361 * t_avg
+
+    # Psychrometric constant (kPaC)
+    gamma = SCP * pres / (0.622 * l)
+
+    # Approximates virtual temperature (K)
+    tkv = 1.01 * (t_avg + 273.15)
+
+    # SCP * AirDensity (J/kg * kg/m3)
+    vol_cp = SCP * pres / (RGAS * tkv)
+
+    # Aerodynamic term (MJ/m2)
+    aero_term = (vol_cp * vpd / ra) / (delta + gamma * (1.0 + RC / ra))
+
+    # Radiation term (MJ/m2)
+    rad_term = delta * net_rad / (delta + gamma * (1.0 + RC / ra))
+
+    # Potential ET (kg water/m2 or mm) (water density = 1 Mg/m3)
+    pmet = (aero_term + rad_term) / l
+    #pmet = MAX(pmet, 0.001)     # Preventing a negative value usually small and indicative of condensation
+
+    #// CO2 correction factor
+    #*co2_adjust_transp = (delta + gamma * (1.0 + RC / ra)) /
+    #    (delta + gamma * (1.0 + RC / (0.32 * (1.0 + 4.9 * exp(-0.0024 * co2))) / ra));
+
+    return pmet
+
+
+def saturation_vapor_pressure(t):
+    return 0.6108 * math.exp(17.27 * t / (t + 237.3))
+
+
+def potential_radiation(doy, lat):
+    SOLAR_CONST = 118.08
+
+    lat_rad = lat * math.pi / 180.0
+    dr = 1.0 + 0.033 * math.cos(2.0 * math.pi * doy / 365.0)
+    sol_dec = 0.409 * math.sin(2.0 * math.pi * doy / 365.0 - 1.39)
+    sunset_hour_angle = math.acos(-math.tan(lat_rad) * math.tan(sol_dec))
+    term = sunset_hour_angle * math.sin(lat_rad) * math.sin(sol_dec) + math.cos(lat_rad) * math.cos(sol_dec) * math.sin(sunset_hour_angle)
+
+    return SOLAR_CONST * dr * term / math.pi
+
+
+def net_radiation(pot_rad, solar_rad, vpa, t_max, t_min):
+    ALBEDO = 0.23
+
+    # Calculate shortwave net radiation
+    rns = (1.0 - ALBEDO) * solar_rad
+
+    # Calculate cloud factor
+    f_cloud = 1.35 * (solar_rad / (pot_rad * 0.75)) - 0.35
+
+    # Calculate humidity factor
+    f_hum = (0.34 - 0.14 * math.sqrt(vpa))
+
+    # Calculate isothermal LW net radiation
+    lwr = 86400.0 * 5.67E-8 * 0.5 * (pow(t_max + 273.15, 4.0) + pow(t_min + 273.15, 4.0)) / 1.0E6
+
+    rnl = lwr * f_cloud * f_hum
+
+    return rns - rnl
+
+
+def aerodynamic_resistance(uz, z):
+    VK = 0.41   # von Karman's constant
+
+    uz = 1.0E-5 if uz == 0.0 else uz
+    u2 = uz if z == 2.0 else uz * (4.87 / (math.log(67.8 * z - 5.42)))
+    u2 *= 86400.0   # Convert to m/day
+    d = 0.08
+    zom = 0.01476
+    zoh = 0.001476
+    zm = 2.0
+    zh = 2.0
+
+    r_a = math.log((zm - d) / zom) * math.log((zh - d) / zoh) / (VK * VK * u2)
+
+    return r_a
+
 
 def read_cycles_weather(f, start_year=0, end_year=9999):
     NUM_HEADER_LINES = 4
@@ -41,6 +146,16 @@ def read_cycles_weather(f, start_year=0, end_year=9999):
     df = df.iloc[NUM_HEADER_LINES:, :]
     df = df.astype(columns)
     df = df[(df['YEAR'] <= end_year) & (df['YEAR'] >= start_year)]
+
+    with open(f) as file:
+        lines = [line.strip() for line in file.readlines() if not line.startswith('#')][:3]
+
+    for line in lines:
+        df[line.split()[0]] = float(line.split()[1])
+
+    df['PRESSURE'] = df['ALTITUDE'].map(lambda x: 101.325 * math.exp(-x / 8200.0))
+
+    df = df.reset_index()
 
     return df
 
@@ -169,7 +284,6 @@ def calculate_planting_date(crop, limit, weather_df, temperature_levels, precipi
 def main(params):
     crop = params['crop']
     lookup_table = params['lut']
-    scenario = CONTROL_SCENARIO if lookup_table == 'EOW' else ''
     start_year = params['start']
     end_year = params['end']
 
@@ -200,11 +314,21 @@ def main(params):
         print(len(weathers), counter:= counter + 1, grid)
 
         # Open weather file
-        f = f'./input/weather/{scenario}/{scenario}_{grid}.weather' if lookup_table == 'EOW' else f'input/weather/{grid}'
-        weather_df = read_cycles_weather(f, start_year, end_year)
+        if lookup_table == 'EOW':
+            weather_df = pd.DataFrame()
+            for s in CONTROL_SCENARIO:
+                _df = read_cycles_weather(f'./input/weather/{s}/{s}_{grid}.weather', start_year, end_year)
+                weather_df = pd.concat([weather_df, _df])
+            weather_df = weather_df.groupby(level=0).mean()
+            print(weather_df)
+        else:
+            weather_df = read_cycles_weather(f'input/weather/{grid}', start_year, end_year)
 
         # Calculate daily average temperature and thermal time
         weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
+        weather_df['pet'] = weather_df.apply(lambda x: pet(x['DOY'], x['LATITUDE'], x['PRESSURE'], x['SCREENING_HEIGHT'], x['TX'], x['TN'], x['SOLAR'], x['RHX'], x['RHN'], x['WIND']), axis=1)
+        print(weather_df)
+        exit()
         weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
         weather_df['month'] = weather_df['DOY'].map(lambda x: find_month(x))
 
@@ -233,22 +357,24 @@ def main(params):
 
         if lookup_table == 'EOW':
             for s in SCENARIOS:
-                if s == CONTROL_SCENARIO:
-                    for y in range(start_year, end_year + 1):
-                        dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid
-                else:
-                    f = f'./input/weather/{s}/{s}_{grid}.weather'
-                    weather_df = read_cycles_weather(f, start_year, end_year)
-                    weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
-                    weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
+                for m in s:
+                    if m in CONTROL_SCENARIO:
+                        for y in range(start_year, end_year + 1):
+                            dict[grid][f'{m}_{"%4.4d" % y}'] = hybrid
+                    else:
+                        f = f'./input/weather/{m}/{m}_{grid}.weather'
+                        weather_df = read_cycles_weather(f, start_year, end_year)
+                        weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
+                        weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
 
-                    for y in range(start_year, end_year + 1):
-                        dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
+                        for y in range(start_year, end_year + 1):
+                            dict[grid][f'{m}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
         else:
             dict[grid]['crop'] = hybrid
 
     output_df = lookup_df.join(pd.DataFrame(dict).T, on='Weather')
     output_df = output_df[output_df['Control'].notna()]
+    output_df['pd'] = output_df['pd'].astype(int)
 
     output_df.drop(columns=[
         'NAME_0',
