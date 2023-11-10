@@ -11,11 +11,20 @@ jobstart=`date +%s`
 
 python3 ./bin/calculate_planting_dates.py --crop maize --lut EOW --start 0001 --end 0019
 
-python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_cntrl_03 --no-adaption
 python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_cntrl_03 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_cntrl_03m02 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_cntrl_03m03 --adaption
 
 python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01 --no-adaption
 python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01m02 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01m02 --adaption
+
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01m03 --no-adaption
+python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_01m03 --adaption
 
 python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_02 --no-adaption
 python3 ./bin/run-cycles.py --crop maize --lut EOW --start 0001 --end 0019 --scenario nw_targets_02 --adaption
@@ -38,4 +47,4 @@ dt=$((jobend - jobstart))
 ds=$((dt % 60))
 dm=$(((dt / 60) % 60))
 dh=$((dt / 3600))
-printf "Elapsed time %d:%02d:%02d" $dh $dm $ds
+printf "Elapsed time %d:%02d:%02d\n" $dh $dm $ds

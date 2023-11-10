@@ -8,16 +8,16 @@ SUMMARY_FILE = lambda lut, scenario, crop, adaption: f'summary/{lut.lower()}_{sc
 WATER_SUMMARY_FILE = lambda lut, scenario, crop, adaption: f'summary/{lut.lower()}_{scenario}_{crop}_water{"_adaption" if adaption else ""}.csv' if lut == 'EOW' else f'summary/{lut.lower()}_{crop}.csv'
 
 SCENARIOS = [
-    'nw_cntrl_03',
-    'nw_targets_01',
-    'nw_targets_02',
-    'nw_targets_03',
-    'nw_targets_04',
-    'nw_targets_05',
-    'nw_ur_150_07',
+    ['nw_cntrl_03', 'nw_cntrl_03m02', 'nw_cntrl_03m03'],
+    ['nw_targets_01', 'nw_targets_01m02', 'nw_targets_01m03'],
+    ['nw_targets_02'],
+    ['nw_targets_03'],
+    ['nw_targets_04'],
+    ['nw_targets_05'],
+    ['nw_ur_150_07'],
 ]
 
-CONTROL_SCENARIO = 'nw_cntrl_03'
+CONTROL_SCENARIO = ['nw_cntrl_03','nw_cntrl_03m02',  'nw_cntrl_03m03']
 
 CROPS = {
     'maize': {
