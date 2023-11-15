@@ -205,7 +205,7 @@ def _main():
     parser.add_argument(
         '--scenario',
         default='nw_cntrl_03',
-        choices=[m for scenario in SCENARIOS for m in scenario],
+        choices=SCENARIOS,
         help='EOW NW scenario',
     )
     parser.add_argument(

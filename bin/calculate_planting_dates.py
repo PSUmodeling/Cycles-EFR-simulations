@@ -42,8 +42,6 @@ def read_cycles_weather(f, start_year=0, end_year=9999):
     df = df.astype(columns)
     df = df[(df['YEAR'] <= end_year) & (df['YEAR'] >= start_year)]
 
-    df = df.reset_index()
-
     return df
 
 
@@ -171,6 +169,7 @@ def calculate_planting_date(crop, limit, weather_df, temperature_levels, precipi
 def main(params):
     crop = params['crop']
     lookup_table = params['lut']
+    scenario = CONTROL_SCENARIO if lookup_table == 'EOW' else ''
     start_year = params['start']
     end_year = params['end']
 
@@ -201,14 +200,8 @@ def main(params):
         print(len(weathers), counter:= counter + 1, grid)
 
         # Open weather file
-        if lookup_table == 'EOW':
-            weather_df = pd.DataFrame()
-            for s in CONTROL_SCENARIO:
-                _df = read_cycles_weather(f'./input/weather/{s}/{s}_{grid}.weather', start_year, end_year)
-                weather_df = pd.concat([weather_df, _df])
-            weather_df = weather_df.groupby(level=0).mean()
-        else:
-            weather_df = read_cycles_weather(f'input/weather/{grid}', start_year, end_year)
+        f = f'./input/weather/{scenario}/{scenario}_{grid}.weather' if lookup_table == 'EOW' else f'input/weather/{grid}'
+        weather_df = read_cycles_weather(f, start_year, end_year)
 
         # Calculate daily average temperature and thermal time
         weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
@@ -240,24 +233,22 @@ def main(params):
 
         if lookup_table == 'EOW':
             for s in SCENARIOS:
-                for m in s:
-                    if m in CONTROL_SCENARIO:
-                        for y in range(start_year, end_year + 1):
-                            dict[grid][f'{m}_{"%4.4d" % y}'] = hybrid
-                    else:
-                        f = f'./input/weather/{m}/{m}_{grid}.weather'
-                        weather_df = read_cycles_weather(f, start_year, end_year)
-                        weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
-                        weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
+                if s == CONTROL_SCENARIO:
+                    for y in range(start_year, end_year + 1):
+                        dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid
+                else:
+                    f = f'./input/weather/{s}/{s}_{grid}.weather'
+                    weather_df = read_cycles_weather(f, start_year, end_year)
+                    weather_df['temperature'] = 0.5 * (weather_df['TX'] + weather_df['TN'])
+                    weather_df['thermal_time'] = weather_df['temperature'].map(lambda x: 0.0 if x < CROPS[crop]['base_temperature'] else x - CROPS[crop]['base_temperature'])
 
-                        for y in range(start_year, end_year + 1):
-                            dict[grid][f'{m}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
+                    for y in range(start_year, end_year + 1):
+                        dict[grid][f'{s}_{"%4.4d" % y}'] = hybrid if y <= INJECTION_YEAR else select_hybrid(crop, weather_df[weather_df['YEAR'] == y - 1]['thermal_time'].mean() * 365)
         else:
             dict[grid]['crop'] = hybrid
 
     output_df = lookup_df.join(pd.DataFrame(dict).T, on='Weather')
     output_df = output_df[output_df['Control'].notna()]
-    output_df['pd'] = output_df['pd'].astype(int)
 
     output_df.drop(columns=[
         'NAME_0',
